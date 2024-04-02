@@ -536,6 +536,9 @@ joined together."))
 (defvar slime-repl-suppress-prompt nil
   "Supresses Slime REPL prompt when bound to T.")
 
+(defvar slime-repl-prompt-function nil
+  "Custom function returning a prompt string, or NIL.")
+
 (defun slime-repl-insert-prompt ()
   "Insert the prompt (before markers!).
 Set point after the prompt.
@@ -548,7 +551,10 @@ If `slime-repl-suppress-prompt' is true, does nothing and returns nil."
       (slime-save-marker slime-output-end
         (unless (bolp) (insert-before-markers "\n"))
         (let ((prompt-start (point))
-              (prompt (format "%s> " (slime-lisp-package-prompt-string))))
+              (prompt (if slime-repl-prompt-function
+                          (funcall slime-repl-prompt-function
+                                   (slime-current-package))
+                        (format "%s> " (slime-lisp-package-prompt-string)))))
           (slime-propertize-region
               '(face slime-repl-prompt-face
                      read-only t slime-repl-prompt t
@@ -852,7 +858,8 @@ used with a prefix argument (C-u), doesn't switch back afterwards."
     (delete-region slime-output-start slime-output-end)
     (when (< (point) slime-repl-input-start-mark)
       (goto-char slime-repl-input-start-mark))
-    (recenter t))
+    (recenter (count-lines slime-repl-input-start-mark
+                           slime-repl-prompt-start-mark)))
   (run-hooks 'slime-repl-clear-buffer-hook))
 
 (defun slime-repl-clear-output ()
