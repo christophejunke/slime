@@ -1022,7 +1022,7 @@ The processing is done in the extent of the toplevel restart."
          (interrupt-worker-thread connection thread-id))
         (((:write-string
            :debug :debug-condition :debug-activate :debug-return :channel-send
-           :presentation-start :presentation-end
+           :presentation-start :presentation-end :presentation-update
            :new-package :new-features :ed :indentation-update
            :eval :eval-no-wait :background-message :inspect :ping
            :y-or-n-p :read-from-minibuffer :read-string :read-aborted :test-delay

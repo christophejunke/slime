@@ -59,6 +59,9 @@
 (make-variable-buffer-local
  (defvar slime-presentation-start-to-point (make-hash-table)))
 
+(make-variable-buffer-local
+ (defvar slime-presentation-changes (make-hash-table)))
+
 (defun slime-mark-presentation-start (id &optional target)
   "Mark the beginning of a presentation with the given ID.
 TARGET can be nil (regular process output) or :repl-result."
@@ -156,7 +159,9 @@ RESULT-P decides whether a face for a return value or output text is used."
                        "mouse-2: copy to input; mouse-3: menu"
                      "mouse-2: inspect; mouse-3: menu"))
       (overlay-put overlay 'face 'slime-repl-inputed-output-face)
-      (overlay-put overlay 'keymap slime-presentation-map))))
+      (overlay-put overlay 'keymap slime-presentation-map)
+      (when (fboundp 'pulse-momentary-highlight-overlay)
+        (pulse-momentary-highlight-overlay overlay 'slime-highlight-face)))))
 
 (defun slime-remove-presentation-properties (from to presentation)
   (let ((inhibit-read-only t))
@@ -759,6 +764,9 @@ output; otherwise the new input is appended."
     ((:presentation-start id &optional target)
      (slime-mark-presentation-start id target)
      t)
+    ((:presentation-update id string)
+     (setf (gethash id slime-presentation-changes) string)
+     (run-with-idle-timer 0 nil 'slime-presentations-update-content))
     ((:presentation-end id &optional target)
      (slime-mark-presentation-end id target)
      t)
@@ -814,10 +822,38 @@ even on Common Lisp implementations without weak hash tables."
   (slime-eval-async `(swank:clear-repl-results))
   (unless (eql major-mode 'slime-repl-mode)
     (slime-switch-to-output-buffer))
+  (clrhash slime-presentation-changes)
   (slime-for-each-presentation-in-region 1 (1+ (buffer-size))
 					 (lambda (presentation from to whole-p)
 					   (slime-remove-presentation-properties from to
 										 presentation))))
+
+(defun slime-presentations-collect-updates ()
+  (let ((changes))
+    (slime-for-each-presentation-in-region
+     1 (buffer-size)
+     (lambda (presentation from to whole-p)
+       (let ((id (slime-presentation-id presentation)))
+         (let ((text (gethash id slime-presentation-changes)))
+           (when text
+             (let ((marker (make-marker)))
+               (set-marker marker from)
+               (push (list id presentation marker (- to from) text) changes)))))))
+    changes))
+
+(defun slime-presentations-update-content ()
+  (interactive)
+  (save-excursion
+    (save-restriction
+      (let ((inhibit-read-only t)
+            (inhibit-modification-hooks t)))
+      (dolist (change (slime-presentations-collect-updates))
+        (cl-destructuring-bind (id presentation marker size new-text) change
+          (remhash id slime-presentation-changes)
+          (goto-char (marker-position marker))
+          (set-marker marker nil)
+          (slime-insert-presentation new-text id)
+          (delete-region (point) (+ (point) size)))))))
 
 (defun slime-presentation-inspector-insert-ispec (ispec)
   (if (stringp ispec)

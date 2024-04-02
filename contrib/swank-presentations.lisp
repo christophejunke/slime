@@ -27,9 +27,33 @@
   (make-weak-value-hash-table :test 'eql)
   "Store the mapping of numeric identifiers to objects")
 
+(defvar *presentation-id-to-string*
+  (make-weak-value-hash-table :test 'eql)
+  "Store the mapping of numeric identifiers to representation")
+
+(define-condition presentation-event () ())
+
+(define-condition presentation-changed (presentation-event)
+  ((%id :initarg :id :accessor presentation-id)
+   (%str :initarg :new-string :accessor presentation-string))
+  (:report (lambda (o s)
+             (with-slots (%id %str) o
+               (format s "ID ~a new representation is ~s" %id %str)))))
+
 (defun clear-presentation-tables ()
   (clrhash *object-to-presentation-id*)
-  (clrhash *presentation-id-to-object*))
+  (clrhash *presentation-id-to-object*)
+  (clrhash *presentation-id-to-string*))
+
+(defun object-representation (id object)
+  (let ((object (if (eq object *nil-surrogate*) nil object)))
+    (let ((string (prin1-to-string object)))
+      (prog1 string
+        (let ((previous (gethash id *presentation-id-to-string*)))
+          (unless (equal previous string)
+            (setf (gethash id *presentation-id-to-string*) string)
+            (with-simple-restart (ignore "Ignore event")
+              (signal 'presentation-changed :id id :new-string string))))))))
 
 (defvar *presentation-counter* 0 "identifier counter")
 
@@ -97,6 +121,21 @@ The secondary value indicates the absence of an entry."
   (clear-presentation-tables)
   t)
 
+(defun refresh-presentations (&aux events)
+  (with-hash-table-iterator (next *presentation-id-to-object*)
+    (loop
+      (multiple-value-bind (some-value id object) (next)
+        (unless some-value
+          (return events))
+        ;; recompute
+        (handler-case (object-representation id object)
+          (presentation-changed (e) (push e events)))))))
+
+(defun send-presentation-updated (events)
+  (dolist (e events)
+    (with-slots (%id %str) e
+      (send-to-emacs `(:presentation-update ,%id ,%str)))))
+
 (defun present-repl-results (values)
   ;; Override a function in swank.lisp, so that
   ;; presentations are associated with every REPL result.
@@ -104,13 +143,16 @@ The secondary value indicates the absence of an entry."
            (let ((id (and *record-repl-results*
                           (save-presented-object value))))
 	     (send-to-emacs `(:presentation-start ,id :repl-result))
-	     (send-to-emacs `(:write-string ,(prin1-to-string value)
-					    :repl-result))
+             (handler-bind ((presentation-changed
+                              (lambda (c) (invoke-restart (find-restart 'ignore c)))))
+	       (send-to-emacs `(:write-string ,(object-representation id value)
+			        :repl-result)))
 	     (send-to-emacs `(:presentation-end ,id :repl-result))
 	     (send-to-emacs `(:write-string ,(string #\Newline)
-					    :repl-result)))))
+			      :repl-result)))))
     (fresh-line)
-    (really-finish-output *standard-output*)
+    (finish-output)
+    (send-presentation-updated (refresh-presentations))
     (if (null values)
         (send-to-emacs `(:write-string "; No value" :repl-result))
         (mapc #'send values))))
