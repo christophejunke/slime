@@ -160,8 +160,7 @@ RESULT-P decides whether a face for a return value or output text is used."
                      "mouse-2: inspect; mouse-3: menu"))
       (overlay-put overlay 'face 'slime-repl-inputed-output-face)
       (overlay-put overlay 'keymap slime-presentation-map)
-      (when (fboundp 'pulse-momentary-highlight-overlay)
-        (pulse-momentary-highlight-overlay overlay 'slime-highlight-face)))))
+      (run-hook-with-args 'slime-presentation-inserted-hook overlay))))
 
 (defun slime-remove-presentation-properties (from to presentation)
   (let ((inhibit-read-only t))
@@ -841,19 +840,24 @@ even on Common Lisp implementations without weak hash tables."
                (push (list id presentation marker (- to from) text) changes)))))))
     changes))
 
-(defun slime-presentations-update-content ()
-  (interactive)
+(defvar slime-presentation-inserted-hook nil)
+
+(defun slime-presentations-update-change (change)
   (save-excursion
     (save-restriction
-      (let ((inhibit-read-only t)
-            (inhibit-modification-hooks t)))
-      (dolist (change (slime-presentations-collect-updates))
-        (cl-destructuring-bind (id presentation marker size new-text) change
-          (remhash id slime-presentation-changes)
+      (cl-destructuring-bind (id _ marker size new-text) change
+        (remhash id slime-presentation-changes)
+        (let ((inhibit-read-only t)
+              (inhibit-modification-hooks t))
           (goto-char (marker-position marker))
           (set-marker marker nil)
           (slime-insert-presentation new-text id)
           (delete-region (point) (+ (point) size)))))))
+
+(defun slime-presentations-update-content ()
+  (interactive)
+  (mapc 'slime-presentations-update-change
+        (slime-presentations-collect-updates)))
 
 (defun slime-presentation-inspector-insert-ispec (ispec)
   (if (stringp ispec)

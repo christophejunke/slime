@@ -153,9 +153,7 @@ The secondary value indicates the absence of an entry."
     (fresh-line)
     (finish-output)
     (send-presentation-updated (refresh-presentations))
-    (if (null values)
-        (send-to-emacs `(:write-string "; No value" :repl-result))
-        (mapc #'send values))))
+    (mapc #'send values)))
 
 
 ;;;; Presentation menu protocol

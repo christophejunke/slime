@@ -258,6 +258,7 @@ If LOAD is true, load the fasl file."
     swank-fancy-inspector
     swank-presentations swank-presentation-streams
     #+(or asdf2 asdf3 sbcl ecl) swank-asdf
+    swank-prompt
     swank-package-fu
     swank-hyperdoc
     #+sbcl swank-sbcl-exts

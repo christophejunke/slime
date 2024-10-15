@@ -191,6 +191,10 @@ exhausted."
               matchings)
     (values matchings interrupted-p)))
 
+(defun accept-all (_)
+  "Default filter that rejects no symbol"
+  (declare (ignore _))
+  t)
 
 (defun fuzzy-generate-matchings (string default-package-name
                                  time-limit-in-msec)
@@ -217,7 +221,7 @@ TIME-LIMIT-IN-MSEC is NIL, an infinite time limit is assumed."
                               ;; Make package matchings be sorted before all
                               ;; the relative symbol matchings while preserving
                               ;; over all orderness.
-                              (/ p.score 100)
+                              (* p.score 100)
                               (+ p.score m.score)))
                     m))
                 matchings)))
@@ -225,7 +229,7 @@ TIME-LIMIT-IN-MSEC is NIL, an infinite time limit is assumed."
              (fuzzy-find-matching-symbols designator package
                                           :time-limit-in-msec time-limit
                                           :external-only (not internal-p)
-                                          :filter (or filter #'identity)))
+                                          :filter (or filter #'accept-all)))
            (find-packages (designator time-limit)
              (fuzzy-find-matching-packages designator
                                            :time-limit-in-msec time-limit))
@@ -244,7 +248,7 @@ TIME-LIMIT-IN-MSEC is NIL, an infinite time limit is assumed."
               ((string= parsed-package-name "") ; E.g. STRING = ":" or ":foo"
                (setf (values symbols time-limit)
                      (find-symbols parsed-symbol-name package time-limit)))
-              (t                   ; E.g. STRING = "asd:" or "asd:foo"
+              (t                        ; E.g. STRING = "asd:" or "asd:foo"
                ;; Find fuzzy matchings of the denoted package identifier part.
                ;; After that, find matchings for the denoted symbol identifier
                ;; relative to all the packages found.
@@ -263,26 +267,26 @@ TIME-LIMIT-IN-MSEC is NIL, an infinite time limit is assumed."
                                   (fuzzy-matching.package-name
                                    package-matching))
                    while (or (not time-limit) (> rest-time-limit 0)) do
-                   (multiple-value-bind (matchings remaining-time)
-                       ;; The duplication filter removes all those symbols
-                       ;; which are present in more than one package
-                       ;; match. See *FUZZY-DUPLICATE-SYMBOL-FILTER*
-                       (find-symbols parsed-symbol-name package rest-time-limit
-                                     (%make-duplicate-symbols-filter
-                                      package-matching symbol-packages dedup-table))
-                     (setf matchings (fix-up matchings package-matching))
-                     (setf symbols   (concatenate 'vector symbols matchings))
-                     (setf rest-time-limit remaining-time)
-                     (let ((guessed-sort-duration
-                             (%guess-sort-duration (length symbols))))
-                       (when (and rest-time-limit
-                                  (<= rest-time-limit guessed-sort-duration))
-                         (decf rest-time-limit guessed-sort-duration)
-                         (loop-finish))))
+                      (multiple-value-bind (matchings remaining-time)
+                          ;; The duplication filter removes all those symbols
+                          ;; which are present in more than one package
+                          ;; match. See *FUZZY-DUPLICATE-SYMBOL-FILTER*
+                          (find-symbols parsed-symbol-name package rest-time-limit
+                                        (%make-duplicate-symbols-filter
+                                         package-matching symbol-packages dedup-table))
+                        (setf matchings (fix-up matchings package-matching))
+                        (setf symbols   (concatenate 'vector symbols matchings))
+                        (setf rest-time-limit remaining-time)
+                        (let ((guessed-sort-duration
+                                (%guess-sort-duration (length symbols))))
+                          (when (and rest-time-limit
+                                     (<= rest-time-limit guessed-sort-duration))
+                            (decf rest-time-limit guessed-sort-duration)
+                            (loop-finish))))
                    finally
-                   (setf time-limit rest-time-limit)
-                   (when (equal parsed-symbol-name "") ; E.g. STRING = "asd:"
-                     (setf packages symbol-packages))))))
+                      (setf time-limit rest-time-limit)
+                      (when (equal parsed-symbol-name "") ; E.g. STRING = "asd:"
+                        (setf packages symbol-packages))))))
         ;; Sort by score; thing with equal score, sort alphabetically.
         ;; (Especially useful when PARSED-SYMBOL-NAME is empty, and all
         ;; possible completions are to be returned.)
@@ -356,7 +360,7 @@ equal, the one which comes alphabetically first wins."
     (values (floor (get-internal-real-time) units-per-msec))))
 
 (defun fuzzy-find-matching-symbols
-    (string package &key (filter #'identity) external-only time-limit-in-msec)
+    (string package &key (filter #'accept-all) external-only time-limit-in-msec)
   "Returns two values: a vector of fuzzy matchings for matching
 symbols in PACKAGE, using the fuzzy completion algorithm, and the
 remaining time limit.
@@ -379,7 +383,7 @@ negative, perform a NOP."
              (cond ((not time-limit-p)
                     ;; propagate NIL back as infinite time limit
                     (values nil nil))
-                   ((> count 0) ; ease up on getting internal time like crazy
+                   ((> count 0)  ; ease up on getting internal time like crazy
                     (setf count (mod (1+ count) 128))
                     (values nil old-remaining-time))
                    (t (let* ((elapsed-time (- (get-real-time-in-msecs)
@@ -401,7 +405,7 @@ negative, perform a NOP."
                   ((not (and (or (not external-only)
                                  (symbol-external-p symbol package))
                              (funcall filter symbol))))
-                  ((string= "" string) ; "" matches always
+                  ((string= "" string)  ; "" matches always
                    (vector-push-extend
                     (make-fuzzy-matching symbol package-name
                                          0.0 '() '())
@@ -484,6 +488,8 @@ user selected."
 
 ;;;;; Fuzzy completion core
 
+(defvar *ddd* nil)
+
 (defparameter *fuzzy-recursion-soft-limit* 30
   "This is a soft limit for recursion in
 RECURSIVELY-COMPUTE-MOST-COMPLETIONS.  Without this limit,
@@ -503,10 +509,12 @@ problem -- this is only here as a safeguard.")
 SHORT onto the string FULL, using CHAR= as a equality function for
 letters.  Returns two values:  The first being the completion
 chunks of the highest scorer, and the second being the score."
+  (when (and *ddd* (search short full))
+    (break "~a ~a" short full))
   (let* ((scored-results
-          (mapcar #'(lambda (result)
-                      (cons (score-completion result short full) result))
-                  (compute-most-completions short full)))
+           (mapcar #'(lambda (result)
+                       (cons (score-completion result short full) result))
+                   (compute-most-completions short full)))
          (winner (first (sort scored-results #'> :key #'first))))
     (values (rest winner) (first winner))))
 

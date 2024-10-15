@@ -158,6 +158,11 @@ CONTRIBS is a list of contrib packages to load. If `nil', use
   :prefix "slime-"
   :group 'slime)
 
+(defcustom slime-xref-recenter 1
+  "Defines how slime-xref recenters views. See `RECENTER`."
+  :type '(choice integer (const nil))
+  :group 'slime-ui)
+
 (defcustom slime-truncate-lines t
   "Set `truncate-lines' in popup buffers.
 This applies to buffers that present lines as rows of data, such as
@@ -4643,7 +4648,7 @@ source-location."
 
 (defun slime-xref-show-location (loc)
   (cl-ecase (car loc)
-    (:location (slime-show-source-location loc nil 1))
+    (:location (slime-show-source-location loc t slime-xref-recenter))
     (:error (message "%s" (cadr loc)))
     ((nil))))
 
@@ -4796,7 +4801,7 @@ This is used by `slime-goto-next-xref'")
   "Display the xref at point in the other window."
   (interactive)
   (let ((location (slime-xref-location-at-point)))
-    (slime-show-source-location location t 1)))
+    (slime-show-source-location location t slime-xref-recenter)))
 
 (defun slime-mouse-show-xref (event)
   (interactive "@e")

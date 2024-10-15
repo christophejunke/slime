@@ -262,10 +262,13 @@ LISTENER-EVAL directly, so that spacial variables *, etc are set."
 (defun send-repl-results-to-emacs (values)
   (really-finish-output *standard-output*)
   (if (null values)
-      (send-to-emacs `(:write-string "; No value" :repl-result))
+      (send-to-emacs `(:write-string "" :repl-result))
       (dolist (v values)
         (send-to-emacs `(:write-string ,(cat (prin1-to-string v) #\newline)
                                        :repl-result)))))
+
+(defun send-repl-refresh-prompt (&optional value)
+  (send-to-emacs `(:refresh-prompt ,value)))
 
 (defslimefun redirect-trace-output (target)
   (setf (connection.trace-output *emacs-connection*)

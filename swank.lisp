@@ -44,7 +44,7 @@
     (*print-level*            . 4)
     (*print-length*           . 6)
     (*print-lines*            . 1)
-    (*print-right-margin*     . 200)
+    (*print-right-margin*     . nil)
     (*print-pprint-dispatch*  . ,*backtrace-pprint-dispatch-table*))
   "Pretter settings for printing backtraces.")
 
@@ -1025,8 +1025,8 @@ The processing is done in the extent of the toplevel restart."
            :presentation-start :presentation-end :presentation-update
            :new-package :new-features :ed :indentation-update
            :eval :eval-no-wait :background-message :inspect :ping
-           :y-or-n-p :read-from-minibuffer :read-string :read-aborted :test-delay
-           :write-image :ed-rpc :ed-rpc-no-wait)
+           :y-or-n-p :read-from-minibuffer :read-string :read-aborted :refresh-prompt
+           :repl-request-prompt-refresh :test-delay :write-image :ed-rpc :ed-rpc-no-wait)
           &rest _)
          (declare (ignore _))
          (encode-message event (current-socket-io)))
@@ -2195,7 +2195,7 @@ frame."
 
 (defun frame-to-string (frame)
   (with-string-stream (stream :length (* (or *print-lines* 1) 
-                                         (or *print-right-margin* 100))
+                                         (or *print-right-margin* 5000))
                               :bindings *backtrace-printer-bindings*)
     (handler-case (print-frame frame stream)
       (serious-condition ()
