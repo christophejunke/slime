@@ -495,28 +495,28 @@ joined together."))
 
 (defun slime-repl-eval-string (string)
   (slime-rex ()
-   ((if slime-repl-auto-right-margin
-        `(swank-repl:listener-eval
-          ,string
-          :window-width
-          ,(with-current-buffer (slime-output-buffer)
-             (window-width)))
-        `(swank-repl:listener-eval ,string))
-    (slime-lisp-package))
-   ((:ok r)
-    (lexical-let ((result r))
-                 (slime-run-when-idle
-                  (lambda ()
-                    (with-current-buffer (slime-output-buffer)
-                      (slime-repl-insert-result result)
-                      (slime-repl-insert-prompt))))))
-   ((:abort c)
-    (slime-run-when-idle
-     (lexical-let ((condition c))
-                  (lambda ()
-                    (with-current-buffer (slime-output-buffer)
-                      (slime-repl-show-abort condition)
-                      (slime-repl-insert-prompt))))))))
+      ((if slime-repl-auto-right-margin
+           `(swank-repl:listener-eval
+             ,string
+             :window-width
+             ,(with-current-buffer (slime-output-buffer)
+                (window-width)))
+         `(swank-repl:listener-eval ,string))
+       (slime-lisp-package))
+    ((:ok r)
+     (let ((result r))
+       (slime-run-when-idle
+        `(lambda ()
+           (with-current-buffer (slime-output-buffer)
+             (slime-repl-insert-result ,result)
+             (slime-repl-insert-prompt))))))
+    ((:abort c)
+     (slime-run-when-idle
+      (let ((condition c))
+        `(lambda ()
+           (with-current-buffer (slime-output-buffer)
+             (slime-repl-show-abort ,condition)
+             (slime-repl-insert-prompt))))))))
 
 (defun slime-repl-insert-result (result)
   (with-current-buffer (slime-output-buffer)
