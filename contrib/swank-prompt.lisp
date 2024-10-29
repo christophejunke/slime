@@ -37,6 +37,12 @@
 (defgeneric render-prompt (value stream &key &allow-other-keys)
   (:documentation
    "Print VALUE to STREAM as part of a REPL prompt")
+  (:method :around (o stream &key &allow-other-keys)
+    "Catch errors, it is only a prompt"
+    (handler-case (call-next-method)
+      (error (e)
+        (warn "RENDER-PROMPT: ~a" e)
+        (write-string "<error>" stream))))
   (:method (o stream &key &allow-other-keys)
     "Default method that write the object to stream"
     (write o :stream stream :circle t :escape nil))
