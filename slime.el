@@ -2109,16 +2109,17 @@ or nil if nothing suitable can be found.")
   (let ((case-fold-search t)
         (regexp (concat "^[ \t]*(\\(cl:\\|common-lisp:\\)?in-package\\>[ \t']*"
                         "\\([^)]+\\)[ \t]*)")))
-    (save-excursion
-      (when (or (re-search-backward regexp nil t)
-                (re-search-forward regexp nil t))
-        (let ((name (match-string-no-properties 2)))
-          (when name
-            ;; correctly find the package name based on a string
-            (slime-eval `(cl:package-name
-                          (cl:find-package
-                           (cl:read-from-string ,name)))
-                        name)))))))
+    (when (save-excursion
+            (or (re-search-backward regexp nil t)
+                (re-search-forward regexp nil t)))
+      (let ((name (match-string-no-properties 2)))
+        (when name
+          ;; correctly find the package name based on a string
+          (slime-eval `(cl:ignore-errors
+                        (cl:package-name
+                         (cl:find-package
+                          (cl:read-from-string ,name))))
+                      name))))))
 
 ;;; Synchronous requests are implemented in terms of asynchronous
 ;;; ones. We make an asynchronous request with a continuation function
